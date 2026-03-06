@@ -1652,7 +1652,7 @@ func (e *Engine) dayPhase(ctx context.Context, deaths []string) error {
 
 		speech := speechResult
 		if speech == "" && thoughts.Len() > 0 {
-			speech = thoughts.String()
+			speech = extractSpeakFromText(thoughts.String())
 		}
 
 		if thoughts.Len() > 0 && thoughts.String() != speech {
@@ -2023,7 +2023,7 @@ func (e *Engine) lastWords(ctx context.Context, p *player.Player) error {
 
 	speech := speechResult
 	if speech == "" && thoughts.Len() > 0 {
-		speech = thoughts.String()
+		speech = extractSpeakFromText(thoughts.String())
 	}
 
 	if thoughts.Len() > 0 && thoughts.String() != speech {
@@ -2113,7 +2113,7 @@ func (e *Engine) pkRound(ctx context.Context, tiedPlayers []string) error {
 
 		speech := speechResult
 		if speech == "" && thoughts.Len() > 0 {
-			speech = thoughts.String()
+			speech = extractSpeakFromText(thoughts.String())
 		}
 
 		if thoughts.Len() > 0 && thoughts.String() != speech {
@@ -2620,6 +2620,32 @@ func (e *Engine) sortBySeat(names []string) {
 	sort.Slice(names, func(i, j int) bool {
 		return seatIndex[names[i]] < seatIndex[names[j]]
 	})
+}
+
+// extractSpeakFromText recovers speech content when a model writes
+// speak(content='...') as plain text instead of invoking the tool.
+// Uses LastIndex to handle multiple calls (takes the last one) and
+// content containing quotes.
+func extractSpeakFromText(text string) string {
+	const marker = "speak(content="
+	idx := strings.LastIndex(text, marker)
+	if idx < 0 {
+		return ""
+	}
+	rest := text[idx+len(marker):]
+	if len(rest) < 3 {
+		return ""
+	}
+	quote := rest[0]
+	if quote != '\'' && quote != '"' {
+		return ""
+	}
+	closing := string(quote) + ")"
+	end := strings.LastIndex(rest, closing)
+	if end <= 1 {
+		return ""
+	}
+	return strings.TrimSpace(rest[1:end])
 }
 
 func displayTag(p *player.Player) string {
