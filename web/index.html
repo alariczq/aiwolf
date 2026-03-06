@@ -194,6 +194,10 @@ button {
 .role-witch    { color: #d8b4fe !important; border-color: rgba(216,180,254,0.35) !important; }
 .role-hunter   { color: #fbbf24 !important; border-color: rgba(251,191,36,0.35) !important; }
 .role-idiot    { color: #fb923c !important; border-color: rgba(251,146,60,0.35) !important; }
+.role-guard    { color: #67e8f9 !important; border-color: rgba(103,232,249,0.35) !important; }
+.role-knight   { color: #a5b4fc !important; border-color: rgba(165,180,252,0.35) !important; }
+.role-wolf_king   { color: #f87171 !important; border-color: rgba(248,113,113,0.35) !important; }
+.role-wolf_beauty { color: #f9a8d4 !important; border-color: rgba(249,168,212,0.35) !important; }
 
 .sheriff-badge {
   position: absolute; top: -5px; left: -5px;
@@ -662,12 +666,12 @@ function modelLabel(modelId) {
   return m[modelId] || modelId || '?';
 }
 function roleLabel(r) {
-  var m = { werewolf:'狼人', villager:'村民', seer:'预言家', witch:'女巫', hunter:'猎人', idiot:'白痴', guard:'守卫' };
+  var m = { werewolf:'狼人', villager:'村民', seer:'预言家', witch:'女巫', hunter:'猎人', idiot:'白痴', guard:'守卫', knight:'骑士', wolf_king:'白狼王', wolf_beauty:'狼美人' };
   return m[r] || r || '?';
 }
 function roleCls(r) {
   if (!r) return '';
-  var map = { werewolf:'role-werewolf', villager:'role-villager', seer:'role-seer', witch:'role-witch', hunter:'role-hunter', idiot:'role-idiot' };
+  var map = { werewolf:'role-werewolf', villager:'role-villager', seer:'role-seer', witch:'role-witch', hunter:'role-hunter', idiot:'role-idiot', guard:'role-guard', knight:'role-knight', wolf_king:'role-wolf_king', wolf_beauty:'role-wolf_beauty' };
   return map[r.toLowerCase()] || '';
 }
 var EMOJI = { Alice:'👩', Bob:'👨', Charlie:'🧔', Diana:'👩‍🦰', Eve:'👩‍🦱', Frank:'🧑', Grace:'👩‍🦳', Henry:'🧑‍🦲', Ivy:'👧', Jack:'🧑‍🦱', Kate:'👱‍♀️', Leo:'👦' };

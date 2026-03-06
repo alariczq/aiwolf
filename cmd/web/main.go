@@ -97,9 +97,8 @@ func handleGame(w http.ResponseWriter, r *http.Request) {
 	modelCfg := config.ModelConfigFromEnv()
 	cfg, err := genesis.Create(ctx, modelCfg)
 	if err != nil {
-		log.Printf("Genesis failed: %v, using default config", err)
-		cfg = config.DefaultGameConfig()
-		cfg.Models = modelCfg
+		emit(game.UIEvent{Type: "error", Content: fmt.Sprintf("Genesis failed: %v", err)})
+		return
 	}
 
 	engine, err := game.NewEngine(ctx, cfg, game.WithEmitter(emit), game.WithSilent())
