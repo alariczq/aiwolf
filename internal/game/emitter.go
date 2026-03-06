@@ -57,6 +57,9 @@ func WithCallInterval(d time.Duration) EngineOption {
 }
 
 func (e *Engine) emitEvent(event UIEvent) {
+	if event.Type == "thought" || event.Type == "thinking_start" {
+		return
+	}
 	if event.Player != "" && e.state != nil {
 		if p := e.state.GetPlayer(event.Player); p != nil {
 			if event.ModelID == "" {

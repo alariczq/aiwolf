@@ -21,6 +21,7 @@
   --border-medium: rgba(255,255,255,0.1);
   --accent-claude: #8b5cf6;
   --accent-gemini: #14b8a6;
+  --accent-openai: #3b82f6;
   --phase-accent: #475569;
   --feed-width: 340px;
   --header-height: 48px;
@@ -98,6 +99,14 @@ body.phase-night .stars-overlay{opacity:1}
 .round-info{font-family:var(--font-mono);font-size:0.65rem;color:var(--text-muted);letter-spacing:0.05em}
 .header-right{display:flex;align-items:center;gap:10px}
 button{font-family:var(--font-mono);border:none;cursor:pointer;transition:all 0.2s ease;letter-spacing:0.03em}
+.scenario-input {
+  padding:5px 12px; border-radius:4px; font-size:0.72rem;
+  background:var(--bg-secondary); color:var(--text-primary);
+  border:1px solid var(--border-medium); width:220px;
+  outline:none; transition:border-color 0.2s;
+}
+.scenario-input:focus{border-color:var(--accent-claude)}
+.scenario-input::placeholder{color:var(--text-muted);font-size:0.68rem}
 .btn-primary {
   padding:6px 20px; border-radius:4px; font-size:0.72rem; font-weight:700;
   background:var(--accent-claude); color:white;
@@ -145,7 +154,7 @@ button{font-family:var(--font-mono);border:none;cursor:pointer;transition:all 0.
 body.phase-night .center-table{border-color:rgba(59,130,246,0.12);box-shadow:0 0 60px rgba(0,0,40,0.9),inset 0 0 20px rgba(30,58,95,0.15)}
 body.phase-day .center-table{border-color:rgba(217,119,6,0.1);box-shadow:0 0 60px rgba(40,30,0,0.9),inset 0 0 20px rgba(120,90,30,0.1)}
 body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60px rgba(40,0,0,0.9),inset 0 0 20px rgba(120,30,30,0.1)}
-.table-icon{font-size:1.5rem;opacity:0.4;transition:opacity 0.5s}
+.table-icon{font-size:1.5rem;opacity:0.4;transition:opacity 0.5s;line-height:1;font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',emoji,sans-serif}
 .table-label{font-family:var(--font-display);font-size:0.7rem;color:rgba(255,255,255,0.2);letter-spacing:0.15em}
 
 .player-slot {
@@ -172,6 +181,11 @@ body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60
   background:radial-gradient(circle,#062e2c,#031a19);
   border-color:var(--accent-gemini);
   box-shadow:0 0 16px rgba(20,184,166,0.25),0 4px 16px rgba(0,0,0,0.6);
+}
+.player-slot.openai .player-avatar {
+  background:radial-gradient(circle,#0c1a3d,#060e24);
+  border-color:var(--accent-openai);
+  box-shadow:0 0 16px rgba(59,130,246,0.25),0 4px 16px rgba(0,0,0,0.6);
 }
 .player-slot.dead .player-avatar {
   background:radial-gradient(circle,#1a1e24,#0f1216);
@@ -233,13 +247,6 @@ body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60
   color:rgba(255,255,255,0.88); text-shadow:0 1px 4px rgba(0,0,0,0.9);
   line-height:1.2; white-space:nowrap;
 }
-.player-model {
-  font-family:var(--font-mono); font-size:0.5rem; text-align:center;
-  line-height:1.1; white-space:nowrap; letter-spacing:0.03em;
-}
-.player-slot.claude .player-model{color:#a78bfa}
-.player-slot.gemini .player-model{color:#5eead4}
-.player-slot.dead .player-model{color:#4a5568}
 .player-role {
   font-family:var(--font-mono); font-size:0.56rem; font-weight:600;
   text-align:center; padding:1px 8px; border-radius:3px;
@@ -259,6 +266,46 @@ body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60
 .role-wolf_king{color:#f87171 !important;border-color:rgba(248,113,113,0.25) !important}
 .role-wolf_beauty{color:#f9a8d4 !important;border-color:rgba(249,168,212,0.25) !important}
 
+.player-tooltip{
+  position:fixed;z-index:200;
+  background:rgba(10,14,22,0.96);border:1px solid var(--border-medium);
+  border-radius:10px;padding:14px 16px;
+  max-width:280px;width:max-content;
+  box-shadow:0 8px 32px rgba(0,0,0,0.6);
+  opacity:0;pointer-events:none;transition:opacity 0.15s ease;
+  backdrop-filter:blur(12px);
+}
+.player-tooltip.visible{opacity:1;pointer-events:auto}
+.pt-header{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.pt-name{font-weight:700;font-size:0.88rem;color:var(--text-primary)}
+.pt-role{font-size:0.6rem;padding:2px 8px;border-radius:10px;border:1px solid;font-weight:600}
+.pt-team{font-size:0.62rem;margin-bottom:10px}
+.pt-team.wolf{color:#f87171}
+.pt-team.good{color:#6ee7b7}
+.pt-skill-title{font-size:0.62rem;color:var(--text-muted);margin-bottom:4px;font-weight:600;letter-spacing:0.05em}
+.pt-skill-list{list-style:none;padding:0;margin:0 0 0 0}
+.pt-skill-list li{font-size:0.7rem;color:var(--text-primary);padding:2px 0 2px 14px;position:relative;line-height:1.5}
+.pt-skill-list li::before{content:'';position:absolute;left:2px;top:9px;width:4px;height:4px;border-radius:50%;background:var(--text-muted)}
+.pt-persona{font-size:0.68rem;color:var(--text-secondary);line-height:1.65;margin-top:10px;border-top:1px solid var(--border-subtle);padding-top:8px}
+.pt-model{font-size:0.58rem;font-family:var(--font-mono);color:var(--text-muted);margin-top:8px}
+
+.fx-projectile{position:absolute;pointer-events:none;z-index:100}
+.fx-ring{position:absolute;border-radius:50%;pointer-events:none;z-index:90;transform:translate(-50%,-50%) scale(0);border:2.5px solid;animation:fx-ring-pop 1.2s ease-out forwards}
+@keyframes fx-ring-pop{to{transform:translate(-50%,-50%) scale(1);opacity:0}}
+.fx-particle{position:absolute;pointer-events:none;z-index:100;border-radius:50%;animation:fx-scatter 1.1s ease-out forwards}
+@keyframes fx-scatter{0%{transform:translate(-50%,-50%) scale(1);opacity:1}100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(0);opacity:0}}
+.fx-slash{position:absolute;inset:-8px;z-index:20;pointer-events:none;overflow:visible}
+.fx-slash line{stroke-dasharray:55;stroke-dashoffset:55;animation:fx-draw 0.45s ease-out forwards}
+.fx-slash line:nth-child(2){animation-delay:0.1s}
+.fx-slash line:nth-child(3){animation-delay:0.2s}
+@keyframes fx-draw{to{stroke-dashoffset:0}}
+.fx-rise{position:absolute;pointer-events:none;z-index:100;border-radius:50%;animation:fx-rise-up 1.5s ease-out forwards}
+@keyframes fx-rise-up{0%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(calc(-50% + var(--dx)),-55px) scale(0.3)}}
+.player-slot.fx-glow .player-avatar{animation:fx-glow-pulse 1.4s ease-out !important}
+@keyframes fx-glow-pulse{15%{filter:brightness(2.5);box-shadow:0 0 32px 12px var(--fx-color,rgba(255,50,50,0.7))}100%{filter:brightness(1);box-shadow:none}}
+.fx-shake{animation:fx-shake 0.6s ease-out !important}
+@keyframes fx-shake{8%{transform:translate(-4px,3px)}20%{transform:translate(4px,-3px)}35%{transform:translate(-3px,2px)}50%{transform:translate(3px,-1px)}65%{transform:translate(-1px,1px)}80%{transform:none}}
+
 #vote-svg{position:absolute;inset:0;pointer-events:none;z-index:15;overflow:visible}
 .vote-line{stroke:#dc2626;stroke-width:1.5;stroke-dasharray:6,4;fill:none;opacity:0.65;animation:dash-move 1s linear infinite}
 @keyframes dash-move{to{stroke-dashoffset:-20}}
@@ -268,7 +315,7 @@ body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60
   z-index:25; max-width:480px; width:84%;
   opacity:0; transition:opacity 0.4s ease; pointer-events:none;
 }
-.center-speech.visible{opacity:1}
+.center-speech.visible{opacity:1;pointer-events:auto}
 .center-speech.fade-out{opacity:0;transition:opacity 0.5s ease}
 .center-speech-box {
   background:rgba(255,255,255,0.95); color:#1a1a2e;
@@ -293,8 +340,10 @@ body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60
 }
 .center-speech-avatar.claude{background:rgba(139,92,246,0.12);border:2px solid var(--accent-claude);color:var(--accent-claude)}
 .center-speech-avatar.gemini{background:rgba(20,184,166,0.12);border:2px solid var(--accent-gemini);color:var(--accent-gemini)}
+.center-speech-avatar.openai{background:rgba(59,130,246,0.12);border:2px solid var(--accent-openai);color:var(--accent-openai)}
 .center-speech-box.gray .center-speech-avatar.claude{color:#c4b5fd}
 .center-speech-box.gray .center-speech-avatar.gemini{color:#5eead4}
+.center-speech-box.gray .center-speech-avatar.openai{color:#93c5fd}
 .center-speech-name{font-weight:800;font-size:0.9rem;color:#1a1a2e}
 .center-speech-box.gray .center-speech-name{color:rgba(255,255,255,0.88)}
 .center-speech-model{font-family:var(--font-mono);font-size:0.6rem;color:#94a3b8}
@@ -372,9 +421,11 @@ body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60
 }
 .msg-avatar.claude{background:rgba(139,92,246,0.2);border:1px solid rgba(139,92,246,0.4);color:#c4b5fd}
 .msg-avatar.gemini{background:rgba(20,184,166,0.2);border:1px solid rgba(20,184,166,0.4);color:#5eead4}
+.msg-avatar.openai{background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#93c5fd}
 .msg-name{color:var(--text-primary)}
 .msg-name.claude{color:#c4b5fd}
 .msg-name.gemini{color:#5eead4}
+.msg-name.openai{color:#93c5fd}
 .msg-role {
   font-family:var(--font-mono); font-size:0.5rem; padding:1px 5px;
   border-radius:3px; font-weight:600; letter-spacing:0.02em;
@@ -387,9 +438,6 @@ body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60
 .msg-card.speech{background:rgba(99,102,241,0.06);border-left-color:#6366f1}
 .msg-card.speech .msg-tag{background:rgba(99,102,241,0.2);color:#a5b4fc}
 .msg-card.speech .msg-body{color:rgba(255,255,255,0.82)}
-.msg-card.thought{background:rgba(30,41,59,0.35);border-left-color:#475569}
-.msg-card.thought .msg-tag{background:rgba(71,85,105,0.3);color:#94a3b8}
-.msg-card.thought .msg-body{color:rgba(148,163,184,0.6);font-style:italic}
 .msg-card.action{background:rgba(234,179,8,0.04);border-left-color:#ca8a04;font-size:0.7rem;padding:6px 10px}
 .msg-card.action .msg-tag{background:rgba(234,179,8,0.15);color:#fcd34d}
 .msg-card.action .msg-body{color:rgba(255,255,255,0.5)}
@@ -492,6 +540,19 @@ body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60
 }
 .log-filter-btn:hover{background:rgba(255,255,255,0.08);color:var(--text-secondary)}
 .log-filter-btn.active{background:rgba(139,92,246,0.12);color:#a78bfa;border-color:rgba(139,92,246,0.3)}
+.log-export-bar{display:none;align-items:center;gap:8px;padding:8px 24px;border-bottom:1px solid var(--border-subtle);flex-shrink:0}
+.log-export-bar.visible{display:flex}
+.log-export-btn{font-family:var(--font-mono);font-size:0.62rem;font-weight:600;padding:4px 12px;border-radius:3px;cursor:pointer;border:1px solid var(--border-subtle);transition:all 0.2s;letter-spacing:0.03em}
+.log-export-btn.primary{background:rgba(139,92,246,0.15);color:#a78bfa;border-color:rgba(139,92,246,0.3)}
+.log-export-btn.primary:hover{background:rgba(139,92,246,0.25)}
+.log-export-btn.secondary{background:rgba(255,255,255,0.04);color:var(--text-muted)}
+.log-export-btn.secondary:hover{background:rgba(255,255,255,0.08);color:var(--text-secondary)}
+.log-export-count{font-family:var(--font-mono);font-size:0.62rem;color:var(--text-muted);margin-left:auto}
+.log-overlay-scroll.select-mode .msg-card{cursor:pointer;position:relative;padding-left:34px}
+.log-overlay-scroll.select-mode .msg-card::before{content:'';position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;border:1.5px solid var(--border-medium);border-radius:3px;transition:all 0.15s}
+.log-overlay-scroll.select-mode .msg-card.log-selected::before{background:rgba(139,92,246,0.8);border-color:#a78bfa}
+.log-overlay-scroll.select-mode .msg-card.log-selected::after{content:'';position:absolute;left:13px;top:50%;transform:translateY(-50%) rotate(45deg);width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0}
+.log-overlay-scroll.select-mode .msg-card:hover{background:rgba(255,255,255,0.04)}
 .log-overlay-scroll{flex:1;overflow-y:auto;padding:14px 24px;min-height:0}
 .log-overlay-scroll .msg-card{max-width:700px;margin-left:auto;margin-right:auto;font-size:0.82rem;padding:10px 14px}
 .log-overlay-scroll .msg-card .msg-body{line-height:1.7}
@@ -522,7 +583,6 @@ body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60
   .player-avatar{width:40px;height:40px;font-size:0.95rem}
   .player-slot{width:62px}
   .player-name{font-size:0.6rem}
-  .player-model{font-size:0.44rem}
   .player-role{font-size:0.48rem}
   .final-players{grid-template-columns:repeat(3,1fr)}
 }
@@ -541,6 +601,8 @@ body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60
   </div>
 </div>
 
+<div class="player-tooltip" id="playerTooltip"></div>
+
 <div class="log-overlay" id="logOverlay">
   <div class="log-overlay-header">
     <div class="log-overlay-title">游戏日志回顾</div>
@@ -549,11 +611,17 @@ body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60
   <div class="log-overlay-filters" id="logFilters">
     <button class="log-filter-btn active" data-filter="all" onclick="setLogFilter('all',this)">全部</button>
     <button class="log-filter-btn" data-filter="speech" onclick="setLogFilter('speech',this)">发言</button>
-    <button class="log-filter-btn" data-filter="thought" onclick="setLogFilter('thought',this)">内心OS</button>
-    <button class="log-filter-btn" data-filter="action" onclick="setLogFilter('action',this)">夜间行动</button>
+<button class="log-filter-btn" data-filter="action" onclick="setLogFilter('action',this)">夜间行动</button>
     <button class="log-filter-btn" data-filter="vote-msg" onclick="setLogFilter('vote-msg',this)">投票</button>
     <button class="log-filter-btn" data-filter="death-msg" onclick="setLogFilter('death-msg',this)">死亡</button>
     <button class="log-filter-btn" data-filter="narration-msg" onclick="setLogFilter('narration-msg',this)">旁白</button>
+    <button class="log-filter-btn" id="logSelectToggle" onclick="toggleLogSelect()">勾选导出</button>
+  </div>
+  <div class="log-export-bar" id="logExportBar">
+    <button class="log-export-btn secondary" onclick="logSelectAll()">全选可见</button>
+    <button class="log-export-btn secondary" onclick="logDeselectAll()">取消全选</button>
+    <button class="log-export-btn primary" onclick="exportSelectedLogs()">导出选中</button>
+    <span class="log-export-count" id="logExportCount">已选 0 条</span>
   </div>
   <div class="log-overlay-scroll" id="logOverlayScroll"></div>
 </div>
@@ -580,6 +648,7 @@ body.phase-vote .center-table{border-color:rgba(220,38,38,0.1);box-shadow:0 0 60
     <div class="round-info" id="roundInfo"></div>
   </div>
   <div class="header-right">
+    <input id="scenarioInput" type="text" placeholder="场景（选填，如：小说剑来，剑气长城）" class="scenario-input">
     <button id="startBtn" class="btn-primary" onclick="startGame()">开始游戏</button>
     <button id="clearBtn" class="btn-ghost" onclick="clearGame()">重置</button>
     <div class="conn-status">
@@ -657,14 +726,24 @@ function brand(modelId) {
   if (!modelId) return 'unknown';
   if (modelId.indexOf('claude') !== -1) return 'claude';
   if (modelId.indexOf('gemini') !== -1) return 'gemini';
+  if (modelId.indexOf('gpt') !== -1 || /^o[134]/.test(modelId)) return 'openai';
   return 'unknown';
 }
 function modelLabel(modelId) {
-  var m = {'claude-sonnet':'Sonnet','claude-haiku':'Haiku','claude-opus':'Opus','gemini-flash':'Flash','gemini-pro':'Pro'};
-  var found = m[modelId];
-  if (found) return found;
-  if (modelId && modelId.indexOf('gemini') !== -1 && modelId.indexOf('preview') !== -1) return 'Pro';
-  return modelId || '?';
+  var m = {
+    'claude-sonnet-4-6':'Claude Sonnet 4.6',
+    'claude-haiku-4-5-20251001':'Claude Haiku 4.5',
+    'claude-opus-4-6':'Claude Opus 4.6',
+    'gemini-2.5-flash':'Gemini 2.5 Flash',
+    'gemini-2.5-flash-lite':'Gemini 2.5 Flash Lite',
+    'gemini-2.5-pro':'Gemini 2.5 Pro',
+    'gemini-3-flash-preview':'Gemini 3 Flash',
+    'gemini-3.1-pro-preview':'Gemini 3.1 Pro',
+    'o3':'OpenAI o3',
+    'gpt-4o':'GPT-4o',
+    'gpt-4o-mini':'GPT-4o mini'
+  };
+  return m[modelId] || modelId || '?';
 }
 function roleLabel(r) {
   var m = {werewolf:'狼人',villager:'村民',seer:'预言家',witch:'女巫',hunter:'猎人',idiot:'白痴',guard:'守卫',knight:'骑士',wolf_king:'白狼王',wolf_beauty:'狼美人'};
@@ -675,7 +754,11 @@ function roleCls(r) {
   var map = {werewolf:'role-werewolf',villager:'role-villager',seer:'role-seer',witch:'role-witch',hunter:'role-hunter',idiot:'role-idiot',guard:'role-guard',knight:'role-knight',wolf_king:'role-wolf_king',wolf_beauty:'role-wolf_beauty'};
   return map[r.toLowerCase()] || '';
 }
-function pAvatar(name) { return name ? name.charAt(0) : '?'; }
+function pAvatar(name) {
+  if (!name) return '?';
+  var m = name.match(/[\p{L}]/u);
+  return m ? m[0] : name.charAt(0);
+}
 function phaseLabel(ph) {
   if (ph === 'night')    return '夜晚';
   if (ph === 'day')      return '白天';
@@ -723,7 +806,10 @@ function startGame() {
   setConn('connecting','连接中...');
   if (evtSrc) { evtSrc.close(); evtSrc = null; }
   try {
-    evtSrc = new EventSource('/api/game');
+    var scenario = document.getElementById('scenarioInput').value.trim();
+    var gameUrl = '/api/game';
+    if (scenario) { gameUrl += '?scenario=' + encodeURIComponent(scenario); }
+    evtSrc = new EventSource(gameUrl);
     evtSrc.onopen = function() {
       setConn('connected','已连接');
       addFeedMsg('system-msg', null, '已连接到游戏服务器', '系统');
@@ -752,7 +838,7 @@ function setConn(cls, text) {
 var eventQueue = [];
 var queueTimer = null;
 function handleEvent(ev) {
-  if (ev.type === 'thought' || ev.type === 'game_start') {
+  if (ev.type === 'game_start') {
     dispatchEvent(ev);
     return;
   }
@@ -767,35 +853,38 @@ function processQueue() {
 }
 function getEventDelay(ev) {
   switch (ev.type) {
+    case 'thinking_start':
+    case 'thought':
+      return 0;
     case 'speech':
       var len = (ev.content || '').length;
-      var cs = Math.max(18, Math.min(45, 2500 / Math.max(len, 1)));
-      return Math.round(len * cs) + 2000;
-    case 'phase_change': return 1500;
-    case 'narration': return 4000;
-    case 'death': case 'elimination': case 'self_explode': case 'hunter_shoot': return 2000;
-    case 'vote_cast': return 600;
-    case 'vote_tally': return 1500;
+      var cs = Math.max(35, Math.min(70, 4000 / Math.max(len, 1)));
+      return Math.round(len * cs) + 3000;
+    case 'phase_change': return 2000;
+    case 'narration': return 5000;
+    case 'death': case 'elimination': case 'self_explode': case 'hunter_shoot': return 2500;
+    case 'vote_cast': return 800;
+    case 'vote_tally': return 2000;
     case 'night_action':
       if (ev.action === 'wolf_chat') {
         var wlen = (ev.content || '').length;
-        var wcs = Math.max(18, Math.min(40, 2000 / Math.max(wlen, 1)));
-        return Math.round(wlen * wcs) + 1500;
+        var wcs = Math.max(35, Math.min(60, 3500 / Math.max(wlen, 1)));
+        return Math.round(wlen * wcs) + 2000;
       }
-      if (ev.action === 'kill_vote') return 800;
-      if (ev.action === 'kill_decided') return 2500;
-      return 2500;
-    case 'round_start': return 800;
-    case 'sheriff_vote': return 500;
-    case 'campaign_run': return 600;
-    case 'sheriff_elected': case 'badge_transfer': case 'idiot_reveal': return 1500;
+      if (ev.action === 'kill_vote') return 1000;
+      if (ev.action === 'kill_decided') return 3000;
+      return 3000;
+    case 'round_start': return 1200;
+    case 'sheriff_vote': return 700;
+    case 'campaign_run': return 800;
+    case 'sheriff_elected': case 'badge_transfer': case 'idiot_reveal': return 2000;
     case 'game_end': return 500;
     case 'postgame_chat':
       var plen = (ev.content || '').length;
-      var pcs = Math.max(20, Math.min(40, 2000 / Math.max(plen, 1)));
-      return Math.round(plen * pcs) + 1500;
+      var pcs = Math.max(35, Math.min(60, 3500 / Math.max(plen, 1)));
+      return Math.round(plen * pcs) + 2000;
     case 'postgame_end': return 500;
-    default: return 300;
+    default: return 500;
   }
 }
 function clearEventQueue() {
@@ -812,6 +901,7 @@ function dispatchEvent(ev) {
     game_start:   evGameStart,
     round_start:  evRoundStart,
     phase_change: evPhaseChange,
+    thinking_start: evThinkingStart,
     thought:      evThought,
     speech:       evSpeech,
     night_action: evNightAction,
@@ -881,11 +971,8 @@ function evPhaseChange(ev) {
   addFeedDivider(phaseLabel(ev.phase));
 }
 
-function evThought(ev) {
-  if (!G.players[ev.player]) return;
-  highlightPlayer(ev.player, 'thinking');
-  addFeedMsg('thought', ev.player, ev.content, '内心OS');
-}
+function evThinkingStart() {}
+function evThought() {}
 
 function evSpeech(ev) {
   if (!G.players[ev.player]) return;
@@ -913,16 +1000,32 @@ function evNightAction(ev) {
       var decided = ev.target ? '狼人决定击杀 '+ev.target : '狼人本轮空刀';
       showCenterSpeech(null, decided, {style:'gray', typewriter:false, hold:2500});
       addFeedMsg('action', null, decided, '击杀决定');
+      if (ev.target) fxGlow(ev.target, 'rgba(220,38,38,0.6)');
       return;
     default: break;
   }
   var txt;
   switch (ev.action) {
-    case 'investigate': txt = '查验 '+ev.target+' -> '+ev.result; break;
-    case 'heal': txt = '使用解药救了 '+ev.target; break;
-    case 'poison': txt = '对 '+ev.target+' 使用毒药'; break;
-    case 'guard': txt = ev.target ? '守护 '+ev.target : '今晚空守'; break;
-    case 'charm': txt = '魅惑 '+ev.target; break;
+    case 'investigate':
+      txt = '查验 '+ev.target+' -> '+ev.result;
+      if (ev.player && ev.target) fxScan(ev.player, ev.target);
+      break;
+    case 'heal':
+      txt = '使用解药救了 '+ev.target;
+      if (ev.target) fxHealEffect(ev.target);
+      break;
+    case 'poison':
+      txt = '对 '+ev.target+' 使用毒药';
+      if (ev.player && ev.target) fxPoison(ev.player, ev.target);
+      break;
+    case 'guard':
+      txt = ev.target ? '守护 '+ev.target : '今晚空守';
+      if (ev.target) fxShield(ev.target);
+      break;
+    case 'charm':
+      txt = '魅惑 '+ev.target;
+      if (ev.player && ev.target) fxCharm(ev.player, ev.target);
+      break;
     default: txt = ev.action+(ev.target ? ' '+ev.target : '');
   }
   if (ev.player) {
@@ -949,19 +1052,30 @@ function evVoteTally(ev) {
 }
 
 function evDeath(ev) {
-  markDead(ev.player); clearVoteSvg(); clearVoteBadges();
+  clearVoteSvg(); clearVoteBadges();
   if (G.players[ev.player] && ev.role) G.players[ev.player].role = ev.role;
   addFeedMsg('death-msg', ev.player, ev.player+' 于夜间死亡', '死亡');
-  if (ev.players) syncPlayers(ev.players);
-  refreshSlotRole(ev.player);
+  fxSlash(ev.player, '#dc2626');
+  fxShake(ev.player);
+  fxBurst(ev.player, '#dc2626', 8);
+  setTimeout(function() {
+    markDead(ev.player);
+    if (ev.players) syncPlayers(ev.players);
+    refreshSlotRole(ev.player);
+  }, 1200);
 }
 
 function evElimination(ev) {
-  markDead(ev.player); clearVoteSvg(); clearVoteBadges(); G.votes = {};
+  clearVoteSvg(); clearVoteBadges(); G.votes = {};
   if (G.players[ev.player] && ev.role) G.players[ev.player].role = ev.role;
   addFeedMsg('death-msg', ev.player, ev.player+' 被投票放逐', '淘汰');
-  if (ev.players) syncPlayers(ev.players);
-  refreshSlotRole(ev.player);
+  fxJudge(ev.player, function() {
+    setTimeout(function() {
+      markDead(ev.player);
+      if (ev.players) syncPlayers(ev.players);
+      refreshSlotRole(ev.player);
+    }, 500);
+  });
 }
 
 function evSheriffVote(ev) {
@@ -1008,20 +1122,29 @@ function updateSheriffBadge() {
 }
 
 function evHunterShoot(ev) {
-  markDead(ev.target); clearVoteSvg(); clearVoteBadges();
+  clearVoteSvg(); clearVoteBadges();
   showBubble(ev.player, 'speech', '猎人开枪！带走 '+esc(ev.target), 4000);
   addFeedMsg('death-msg', ev.player, ev.player+' (猎人) 开枪带走了 '+ev.target, '猎人');
-  if (ev.players) syncPlayers(ev.players);
+  fxShoot(ev.player, ev.target, function() {
+    setTimeout(function() {
+      markDead(ev.target);
+      if (ev.players) syncPlayers(ev.players);
+    }, 400);
+  });
 }
 
 function evSelfExplode(ev) {
-  markDead(ev.player); clearVoteSvg(); clearVoteBadges();
+  clearVoteSvg(); clearVoteBadges();
   if (G.players[ev.player] && ev.role) G.players[ev.player].role = ev.role;
   var roleStr = ev.role ? ' ['+roleLabel(ev.role)+']' : '';
   showBubble(ev.player, 'speech', '自爆！', 4000);
   addFeedMsg('death-msg', ev.player, ev.player+roleStr+' 自爆！白天结束。', '自爆');
-  if (ev.players) syncPlayers(ev.players);
-  refreshSlotRole(ev.player);
+  fxExplode(ev.player);
+  setTimeout(function() {
+    markDead(ev.player);
+    if (ev.players) syncPlayers(ev.players);
+    refreshSlotRole(ev.player);
+  }, 1200);
 }
 
 function evIdiotReveal(ev) {
@@ -1053,6 +1176,286 @@ function evPostgameEnd() {
   if (G.endEvent) {
     setTimeout(function(){ showEnd(G.endEvent); }, 1500);
   }
+}
+
+// Player tooltip
+var roleInfoMap = {
+  werewolf:    {name:'狼人',   team:'wolf', skills:['夜晚选择击杀目标（可空刀/自刀）','白天可自爆，立即死亡并结束白天']},
+  seer:        {name:'预言家', team:'good',  skills:['每晚查验一名玩家的阵营']},
+  witch:       {name:'女巫',   team:'good',  skills:['解药：救活当晚被杀者（全局一次）','毒药：毒杀任意玩家（全局一次）','同一晚只能用一种药']},
+  hunter:      {name:'猎人',   team:'good',  skills:['被狼杀或投票出局时可开枪带走一人','被毒杀时不能开枪']},
+  idiot:       {name:'白痴',   team:'good',  skills:['被投票出局时可翻牌免死','翻牌后失去投票权但可发言']},
+  guard:       {name:'守卫',   team:'good',  skills:['每晚守护一名玩家免受狼刀','不能连续守护同一人','守护不挡毒药']},
+  knight:      {name:'骑士',   team:'good',  skills:['白天可发起决斗（全局一次）','决斗狼人则狼人出局，决斗好人则自己出局']},
+  wolf_king:   {name:'白狼王', team:'wolf', skills:['自爆时可同时带走一名玩家','其余能力同普通狼人']},
+  wolf_beauty: {name:'狼美人', team:'wolf', skills:['每晚魅惑一名玩家','死亡时被魅惑者殉情','不能自爆']},
+  villager:    {name:'村民',   team:'good',  skills:['无特殊技能，依靠推理和投票']}
+};
+var ttTimer = null;
+function showPlayerTooltip(slotEl, name) {
+  if (ttTimer) { clearTimeout(ttTimer); ttTimer = null; }
+  var p = G.players[name]; if (!p) return;
+  var tt = document.getElementById('playerTooltip');
+  var info = roleInfoMap[p.role] || {name:p.role||'???',team:'good',skills:[]};
+  var b = brand(p.model_id);
+  var rc = roleCls(p.role);
+  var teamLabel = info.team === 'wolf' ? '狼人阵营' : '好人阵营';
+
+  var html = '<div class="pt-header">' +
+    '<span class="pt-name">'+esc(p.display||p.name)+'</span>' +
+    '<span class="pt-role '+rc+'">'+esc(info.name)+'</span>' +
+    '</div>' +
+    '<div class="pt-team '+(info.team==='wolf'?'wolf':'good')+'">'+teamLabel+'</div>';
+
+  if (info.skills.length) {
+    html += '<div class="pt-skill-title">技能</div><ul class="pt-skill-list">';
+    info.skills.forEach(function(s) { html += '<li>'+esc(s)+'</li>'; });
+    html += '</ul>';
+  }
+
+  if (p.persona) {
+    html += '<div class="pt-persona">'+esc(p.persona)+'</div>';
+  }
+
+  html += '<div class="pt-model">'+esc(modelLabel(p.model_id))+'</div>';
+
+  tt.innerHTML = html;
+  var bc = b==='claude'?'rgba(139,92,246,0.4)':b==='openai'?'rgba(59,130,246,0.4)':'rgba(20,184,166,0.4)';
+  tt.style.borderColor = bc;
+
+  tt.classList.remove('visible');
+  void tt.offsetHeight;
+  var ttRect = tt.getBoundingClientRect();
+  var sr = slotEl.getBoundingClientRect();
+  var x = sr.left + sr.width/2 - ttRect.width/2;
+  var y = sr.bottom + 10;
+  if (x < 8) x = 8;
+  if (x + ttRect.width > window.innerWidth - 8) x = window.innerWidth - ttRect.width - 8;
+  if (y + ttRect.height > window.innerHeight - 8) y = sr.top - ttRect.height - 10;
+  tt.style.left = x + 'px';
+  tt.style.top = y + 'px';
+  requestAnimationFrame(function() { tt.classList.add('visible'); });
+}
+function hidePlayerTooltip() {
+  ttTimer = setTimeout(function() {
+    document.getElementById('playerTooltip').classList.remove('visible');
+  }, 80);
+}
+(function() {
+  var tt = document.getElementById('playerTooltip');
+  tt.addEventListener('mouseenter', function() { if (ttTimer) { clearTimeout(ttTimer); ttTimer = null; } });
+  tt.addEventListener('mouseleave', hidePlayerTooltip);
+})();
+
+// Skill visual effects
+var SVG_CLAW = '<svg viewBox="0 0 40 40" width="40" height="40"><path d="M8 32 Q12 18 20 6" stroke="#dc2626" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M14 34 Q16 20 22 8" stroke="#dc2626" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M20 34 Q20 22 24 10" stroke="#dc2626" stroke-width="3" fill="none" stroke-linecap="round"/></svg>';
+var SVG_EYE = '<svg viewBox="0 0 36 36" width="36" height="36"><ellipse cx="18" cy="18" rx="14" ry="9" fill="none" stroke="#a78bfa" stroke-width="2"/><circle cx="18" cy="18" r="5" fill="#a78bfa" opacity="0.7"/><circle cx="18" cy="18" r="2" fill="#fff"/></svg>';
+var SVG_SKULL = '<svg viewBox="0 0 32 32" width="32" height="32"><circle cx="16" cy="13" r="10" fill="none" stroke="#22c55e" stroke-width="2"/><circle cx="12" cy="11" r="2.5" fill="#22c55e"/><circle cx="20" cy="11" r="2.5" fill="#22c55e"/><path d="M12 19 Q16 23 20 19" fill="none" stroke="#22c55e" stroke-width="1.5"/><rect x="14" y="23" width="4" height="5" rx="1" fill="none" stroke="#22c55e" stroke-width="1.5"/></svg>';
+var SVG_SHIELD = '<svg viewBox="0 0 32 36" width="32" height="36"><path d="M16 2 L28 8 V18 Q28 30 16 34 Q4 30 4 18 V8 Z" fill="none" stroke="#3b82f6" stroke-width="2.5"/><path d="M11 18 L15 22 L22 13" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+var SVG_HEART = '<svg viewBox="0 0 32 32" width="32" height="32"><path d="M16 28 C6 20 2 14 2 9 A6 6 0 0 1 16 6 A6 6 0 0 1 30 9 C30 14 26 20 16 28Z" fill="#f472b6" opacity="0.8"/></svg>';
+var SVG_CROSS = '<svg viewBox="0 0 32 32" width="32" height="32"><line x1="6" y1="6" x2="26" y2="26" stroke="#ef4444" stroke-width="3.5" stroke-linecap="round"/><line x1="26" y1="6" x2="6" y2="26" stroke="#ef4444" stroke-width="3.5" stroke-linecap="round"/></svg>';
+var SVG_GAVEL = '<svg viewBox="0 0 36 36" width="36" height="36"><rect x="10" y="8" width="16" height="8" rx="2" fill="#f59e0b" transform="rotate(-30 18 12)"/><rect x="16" y="14" width="3" height="16" rx="1" fill="#d97706"/><line x1="6" y1="32" x2="30" y2="32" stroke="#92400e" stroke-width="3" stroke-linecap="round"/></svg>';
+
+function fxPos(name) {
+  var slot = document.querySelector('.player-slot[data-name="'+cssEsc(name)+'"]');
+  if (!slot) return null;
+  var cont = document.getElementById('tableContainer');
+  var cr = cont.getBoundingClientRect(), sr = slot.getBoundingClientRect();
+  return { el: slot, x: sr.left - cr.left + sr.width/2, y: sr.top - cr.top + sr.height/2, cont: cont };
+}
+
+function fxFly(fromName, toName, svgStr, dur, cb) {
+  var f = fxPos(fromName), t = fxPos(toName);
+  if (!f || !t) { if (cb) cb(); return; }
+  var el = document.createElement('div');
+  el.className = 'fx-projectile';
+  el.innerHTML = svgStr;
+  el.style.left = f.x + 'px'; el.style.top = f.y + 'px';
+  el.style.transform = 'translate(-50%,-50%)';
+  el.style.transition = 'left '+(dur||700)+'ms cubic-bezier(.2,.8,.3,1), top '+(dur||700)+'ms cubic-bezier(.2,.8,.3,1)';
+  f.cont.appendChild(el);
+  requestAnimationFrame(function() { requestAnimationFrame(function() {
+    el.style.left = t.x + 'px'; el.style.top = t.y + 'px';
+  }); });
+  setTimeout(function() { if (el.parentNode) el.remove(); if (cb) cb(); }, (dur||700) + 100);
+}
+
+function fxRing(name, color, size) {
+  var p = fxPos(name); if (!p) return;
+  var el = document.createElement('div');
+  el.className = 'fx-ring';
+  el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+  el.style.width = (size||70) + 'px'; el.style.height = (size||70) + 'px';
+  el.style.borderColor = color;
+  p.cont.appendChild(el);
+  setTimeout(function() { if (el.parentNode) el.remove(); }, 1300);
+}
+
+function fxBurst(name, color, count) {
+  var p = fxPos(name); if (!p) return;
+  for (var i = 0; i < (count||8); i++) {
+    var dot = document.createElement('div');
+    dot.className = 'fx-particle';
+    dot.style.left = p.x + 'px'; dot.style.top = p.y + 'px';
+    dot.style.width = '7px'; dot.style.height = '7px';
+    dot.style.background = color;
+    var angle = (i / (count||8)) * Math.PI * 2;
+    var dist = 35 + Math.random() * 25;
+    dot.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+    dot.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+    p.cont.appendChild(dot);
+    (function(d) { setTimeout(function() { if (d.parentNode) d.remove(); }, 1200); })(dot);
+  }
+}
+
+function fxSlash(name, color) {
+  var slot = fxPos(name); if (!slot) return;
+  var svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('class','fx-slash');
+  svg.setAttribute('viewBox','0 0 50 50');
+  var lines = [[8,8,42,42],[5,25,45,20],[10,42,40,5]];
+  lines.forEach(function(l) {
+    var line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',l[0]); line.setAttribute('y1',l[1]);
+    line.setAttribute('x2',l[2]); line.setAttribute('y2',l[3]);
+    line.setAttribute('stroke',color||'#dc2626'); line.setAttribute('stroke-width','3');
+    line.setAttribute('stroke-linecap','round');
+    svg.appendChild(line);
+  });
+  var avatar = slot.el.querySelector('.player-avatar');
+  if (avatar) avatar.appendChild(svg);
+  setTimeout(function() { if (svg.parentNode) svg.remove(); }, 1000);
+}
+
+function fxGlow(name, color) {
+  var p = fxPos(name); if (!p) return;
+  p.el.style.setProperty('--fx-color', color);
+  p.el.classList.remove('fx-glow'); void p.el.offsetWidth;
+  p.el.classList.add('fx-glow');
+  setTimeout(function() { p.el.classList.remove('fx-glow'); }, 1500);
+}
+
+function fxShake(name) {
+  var p = fxPos(name); if (!p) return;
+  p.el.classList.remove('fx-shake'); void p.el.offsetWidth;
+  p.el.classList.add('fx-shake');
+  setTimeout(function() { p.el.classList.remove('fx-shake'); }, 650);
+}
+
+function fxClaw(fromName, toName, cb) {
+  fxFly(fromName, toName, SVG_CLAW, 700, function() {
+    fxSlash(toName, '#dc2626');
+    fxShake(toName);
+    setTimeout(function() { fxBurst(toName, '#dc2626', 8); }, 200);
+    if (cb) setTimeout(cb, 400);
+  });
+}
+
+function fxScan(fromName, toName) {
+  fxFly(fromName, toName, SVG_EYE, 750, function() {
+    fxRing(toName, '#a78bfa', 75);
+    fxGlow(toName, 'rgba(167,139,250,0.6)');
+  });
+}
+
+function fxHealEffect(targetName) {
+  fxRing(targetName, '#22c55e', 70);
+  fxGlow(targetName, 'rgba(34,197,94,0.6)');
+  var p = fxPos(targetName); if (!p) return;
+  for (var i = 0; i < 8; i++) {
+    var dot = document.createElement('div');
+    dot.className = 'fx-rise';
+    dot.style.left = (p.x - 12 + Math.random()*24) + 'px';
+    dot.style.top = p.y + 'px';
+    dot.style.width = '6px'; dot.style.height = '6px';
+    dot.style.background = '#4ade80';
+    dot.style.setProperty('--dx', (-12 + Math.random()*24) + 'px');
+    dot.style.animationDelay = (i * 150) + 'ms';
+    p.cont.appendChild(dot);
+    (function(d) { setTimeout(function() { if (d.parentNode) d.remove(); }, 1700); })(dot);
+  }
+}
+
+function fxPoison(fromName, toName) {
+  fxFly(fromName, toName, SVG_SKULL, 750, function() {
+    fxGlow(toName, 'rgba(34,197,94,0.7)');
+    setTimeout(function() { fxBurst(toName, '#22c55e', 10); }, 150);
+  });
+}
+
+function fxShield(targetName) {
+  var p = fxPos(targetName); if (!p) return;
+  var el = document.createElement('div');
+  el.className = 'fx-projectile';
+  el.innerHTML = SVG_SHIELD;
+  el.style.left = p.x + 'px'; el.style.top = (p.y - 5) + 'px';
+  el.style.transform = 'translate(-50%,-50%) scale(0)';
+  el.style.transition = 'transform 0.6s ease-out, opacity 0.4s ease-out';
+  p.cont.appendChild(el);
+  requestAnimationFrame(function() { requestAnimationFrame(function() {
+    el.style.transform = 'translate(-50%,-50%) scale(1.3)';
+  }); });
+  setTimeout(function() { el.style.opacity = '0'; el.style.transform = 'translate(-50%,-50%) scale(1.6)'; }, 1000);
+  setTimeout(function() { if (el.parentNode) el.remove(); }, 1500);
+  fxRing(targetName, '#3b82f6', 65);
+}
+
+function fxCharm(fromName, toName) {
+  fxFly(fromName, toName, SVG_HEART, 800, function() {
+    fxRing(toName, '#f472b6', 65);
+    fxGlow(toName, 'rgba(244,114,182,0.6)');
+    var p = fxPos(toName); if (!p) return;
+    for (var i = 0; i < 7; i++) {
+      var h = document.createElement('div');
+      h.className = 'fx-rise';
+      h.innerHTML = '<svg viewBox="0 0 12 12" width="12" height="12"><path d="M6 11C2 8 0 5.5 0 3.5A3 3 0 0 1 6 2.5 3 3 0 0 1 12 3.5C12 5.5 10 8 6 11Z" fill="#f472b6"/></svg>';
+      h.style.left = (p.x - 18 + Math.random()*36) + 'px';
+      h.style.top = p.y + 'px';
+      h.style.background = 'none';
+      h.style.setProperty('--dx', (-18 + Math.random()*36) + 'px');
+      h.style.animationDelay = (i * 160) + 'ms';
+      p.cont.appendChild(h);
+      (function(d) { setTimeout(function() { if (d.parentNode) d.remove(); }, 1800); })(h);
+    }
+  });
+}
+
+function fxShoot(fromName, toName, cb) {
+  fxFly(fromName, toName, SVG_CROSS, 600, function() {
+    fxShake(toName);
+    fxBurst(toName, '#ef4444', 12);
+    fxGlow(toName, 'rgba(239,68,68,0.7)');
+    if (cb) setTimeout(cb, 350);
+  });
+}
+
+function fxExplode(name) {
+  fxGlow(name, 'rgba(249,115,22,0.8)');
+  fxShake(name);
+  fxBurst(name, '#f97316', 16);
+  fxRing(name, '#f97316', 90);
+  setTimeout(function() { fxBurst(name, '#dc2626', 12); fxRing(name, '#dc2626', 70); }, 350);
+}
+
+function fxJudge(name, cb) {
+  var p = fxPos(name); if (!p) return (cb && cb());
+  var el = document.createElement('div');
+  el.className = 'fx-projectile';
+  el.innerHTML = SVG_GAVEL;
+  el.style.left = p.x + 'px'; el.style.top = (p.y - 50) + 'px';
+  el.style.transform = 'translate(-50%,-50%)';
+  el.style.transition = 'top 0.5s cubic-bezier(.6,.05,.75,.9)';
+  p.cont.appendChild(el);
+  requestAnimationFrame(function() { requestAnimationFrame(function() {
+    el.style.top = p.y + 'px';
+  }); });
+  setTimeout(function() {
+    fxShake(name);
+    fxBurst(name, '#f59e0b', 10);
+    fxRing(name, '#f59e0b', 60);
+    if (el.parentNode) el.remove();
+    if (cb) setTimeout(cb, 300);
+  }, 550);
 }
 
 // Rendering
@@ -1093,9 +1496,9 @@ function renderPlayers() {
         '<div class="campaign-badge">&#x270B;</div>' +
       '</div>' +
       '<div class="player-name">' + esc(p.name) + '</div>' +
-      '<div class="player-model">' + esc(modelLabel(p.model_id)) + '</div>' +
       '<div class="player-role ' + rc + '">' + esc(roleLabel(p.role)) + '</div>';
-    if (p.persona) slot.title = p.persona;
+    slot.addEventListener('mouseenter', function() { showPlayerTooltip(this, p.name); });
+    slot.addEventListener('mouseleave', hidePlayerTooltip);
     cont.appendChild(slot);
   });
 }
@@ -1184,7 +1587,7 @@ function showCenterSpeech(name, content, opts) {
   }
 
   var idx = 0;
-  var speed = Math.max(18, Math.min(45, 2500 / Math.max(content.length, 1)));
+  var speed = Math.max(40, Math.min(80, 5000 / Math.max(content.length, 1)));
   var cursor = document.createElement('span');
   cursor.className = 'center-speech-cursor';
   textEl.appendChild(cursor);
@@ -1248,9 +1651,9 @@ function addFeedMsg(type, playerName, content, tag) {
 
   card.innerHTML = headerHtml + '<div class="msg-body">'+esc(content)+'</div>';
   scroll.appendChild(card);
+
   G.feedMsgCount++;
   updateFeedCount();
-
   if (G.feedCollapsed) {
     G.feedCollapsed = false;
     document.getElementById('feedPanel').classList.remove('collapsed');
@@ -1355,7 +1758,7 @@ function showEnd(ev) {
     card.className = 'fp-card' + (dead ? ' dead' : '');
     card.innerHTML =
       '<div class="fp-name">'+esc(p.name)+'</div>'+
-      '<div class="fp-model" style="color:'+(b==='claude'?'#c4b5fd':'#5eead4')+'">'+esc(modelLabel(p.model_id))+'</div>'+
+      '<div class="fp-model" style="color:'+(b==='claude'?'#c4b5fd':b==='openai'?'#93c5fd':'#5eead4')+'">'+esc(modelLabel(p.model_id))+'</div>'+
       '<div class="fp-role '+roleCls(p.role)+'">'+esc(roleLabel(p.role))+'</div>'+
       '<div class="fp-status">'+(dead?'已死亡':'存活')+'</div>';
     fp.appendChild(card);
@@ -1406,7 +1809,10 @@ function openLogOverlay() {
   overlay.classList.add('visible');
   requestAnimationFrame(function() { scroll.scrollTop = 0; });
 }
-function closeLogOverlay() { document.getElementById('logOverlay').classList.remove('visible'); }
+function closeLogOverlay() {
+  document.getElementById('logOverlay').classList.remove('visible');
+  if (logSelectMode) toggleLogSelect();
+}
 function setLogFilter(filter, btn) {
   currentLogFilter = filter;
   document.querySelectorAll('.log-filter-btn').forEach(function(b) { b.classList.toggle('active', b === btn); });
@@ -1427,6 +1833,82 @@ function applyLogFilter() {
   }
 }
 
+var logSelectMode = false;
+function toggleLogSelect() {
+  logSelectMode = !logSelectMode;
+  var scroll = document.getElementById('logOverlayScroll');
+  var bar = document.getElementById('logExportBar');
+  var btn = document.getElementById('logSelectToggle');
+  if (logSelectMode) {
+    scroll.classList.add('select-mode');
+    bar.classList.add('visible');
+    btn.classList.add('active');
+    scroll.addEventListener('click', onLogCardClick);
+  } else {
+    scroll.classList.remove('select-mode');
+    bar.classList.remove('visible');
+    btn.classList.remove('active');
+    scroll.removeEventListener('click', onLogCardClick);
+    scroll.querySelectorAll('.log-selected').forEach(function(c) { c.classList.remove('log-selected'); });
+  }
+  updateExportCount();
+}
+
+function onLogCardClick(e) {
+  var card = e.target.closest('.msg-card');
+  if (!card) return;
+  card.classList.toggle('log-selected');
+  updateExportCount();
+}
+
+function updateExportCount() {
+  var count = document.querySelectorAll('#logOverlayScroll .msg-card.log-selected').length;
+  document.getElementById('logExportCount').textContent = '已选 ' + count + ' 条';
+}
+
+function logSelectAll() {
+  document.querySelectorAll('#logOverlayScroll .msg-card').forEach(function(c) {
+    if (c.style.display !== 'none') c.classList.add('log-selected');
+  });
+  updateExportCount();
+}
+
+function logDeselectAll() {
+  document.querySelectorAll('#logOverlayScroll .msg-card.log-selected').forEach(function(c) {
+    c.classList.remove('log-selected');
+  });
+  updateExportCount();
+}
+
+function exportSelectedLogs() {
+  var cards = document.querySelectorAll('#logOverlayScroll .msg-card.log-selected');
+  if (cards.length === 0) return;
+  var lines = [];
+  cards.forEach(function(card) {
+    var body = card.querySelector('.msg-body');
+    var name = card.querySelector('.msg-name');
+    var tag = card.querySelector('.msg-tag');
+    var role = card.querySelector('.msg-role');
+    var prefix = '';
+    if (tag) prefix += '[' + tag.textContent.trim() + '] ';
+    if (name) prefix += name.textContent.trim();
+    if (role) prefix += ' (' + role.textContent.trim() + ')';
+    if (name || role) prefix += ': ';
+    var text = body ? body.textContent.trim() : '';
+    lines.push(prefix + text);
+  });
+  var content = lines.join('\n');
+  var blob = new Blob([content], {type:'text/plain;charset=utf-8'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'werewolf-log-' + new Date().toISOString().slice(0,19).replace(/[T:]/g,'-') + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     if (document.getElementById('logOverlay').classList.contains('visible')) {
@@ -1444,6 +1926,10 @@ window.openLogOverlay = openLogOverlay;
 window.closeLogOverlay = closeLogOverlay;
 window.setLogFilter = setLogFilter;
 window.toggleFeed = toggleFeed;
+window.toggleLogSelect = toggleLogSelect;
+window.logSelectAll = logSelectAll;
+window.logDeselectAll = logDeselectAll;
+window.exportSelectedLogs = exportSelectedLogs;
 </script>
 </body>
 </html>

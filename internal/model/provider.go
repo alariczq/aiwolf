@@ -3,25 +3,16 @@ package model
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	"github.com/cloudwego/eino-ext/components/model/gemini"
+	"github.com/cloudwego/eino-ext/components/model/openai"
 	einomodel "github.com/cloudwego/eino/components/model"
 	"google.golang.org/genai"
 
 	"github.com/alaric/eino-learn/internal/config"
 )
-
-var modelAliases = map[string]string{
-	"claude-haiku":       "claude-haiku-4-5-20251001",
-	"claude-sonnet":      "claude-sonnet-4-6",
-	"claude-opus":        "claude-opus-4-6",
-	"gemini-flash":       "gemini-2.5-flash",
-	"gemini-pro":         "gemini-2.5-pro",
-	"gemini-pro-preview": "gemini-3.1-pro-preview",
-}
 
 type Provider struct {
 	cfg   config.ModelConfig
@@ -38,40 +29,33 @@ func NewProvider(cfg config.ModelConfig) *Provider {
 	}
 }
 
-func (p *Provider) ResolveAlias(modelID string) string {
-	if resolved, ok := modelAliases[modelID]; ok {
-		return resolved
-	}
-	return modelID
-}
-
 func (p *Provider) GetModel(ctx context.Context, modelID string) (einomodel.ToolCallingChatModel, error) {
-	resolved := p.ResolveAlias(modelID)
-
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if m, ok := p.cache[resolved]; ok {
+	if m, ok := p.cache[modelID]; ok {
 		return m, nil
 	}
 
 	var m einomodel.ToolCallingChatModel
 	var err error
 
-	switch {
-	case strings.HasPrefix(resolved, "claude-"):
-		m, err = p.createClaude(ctx, resolved)
-	case strings.HasPrefix(resolved, "gemini-"):
-		m, err = p.createGemini(ctx, resolved)
+	switch config.ModelBackend(modelID) {
+	case "claude":
+		m, err = p.createClaude(ctx, modelID)
+	case "gemini":
+		m, err = p.createGemini(ctx, modelID)
+	case "openai":
+		m, err = p.createOpenAI(ctx, modelID)
 	default:
-		return nil, fmt.Errorf("unknown model backend for %q (resolved from %q)", resolved, modelID)
+		return nil, fmt.Errorf("unknown model backend for %q", modelID)
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("creating model %q: %w", resolved, err)
+		return nil, fmt.Errorf("creating model %q: %w", modelID, err)
 	}
 
-	p.cache[resolved] = m
+	p.cache[modelID] = m
 	return m, nil
 }
 
@@ -108,6 +92,20 @@ func (p *Provider) createGemini(ctx context.Context, model string) (einomodel.To
 	return gemini.NewChatModel(ctx, &gemini.Config{
 		Client:      p.geminiClient,
 		Model:       model,
+		Temperature: &temp,
+	})
+}
+
+func (p *Provider) createOpenAI(ctx context.Context, model string) (einomodel.ToolCallingChatModel, error) {
+	if p.cfg.OpenAIAPIKey == "" {
+		return nil, fmt.Errorf("OPENAI_API_KEY is required for model %q", model)
+	}
+	temp := float32(0.7)
+	maxTokens := 1024
+	return openai.NewChatModel(ctx, &openai.ChatModelConfig{
+		APIKey:      p.cfg.OpenAIAPIKey,
+		Model:       model,
+		MaxTokens:   &maxTokens,
 		Temperature: &temp,
 	})
 }

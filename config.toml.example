@@ -1,0 +1,24 @@
+# API Keys
+# At least one key is required. Can also use env vars:
+# CLAUDE_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY
+[keys]
+claude = ""
+gemini = ""
+openai = ""
+
+# Model configuration
+# Available models:
+#   Claude:  claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5-20251001
+#   Gemini:  gemini-3.1-pro-preview, gemini-3-flash-preview, gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite
+#   OpenAI:  o3, gpt-4o, gpt-4o-mini
+[models]
+# Models for player assignment (shuffled, cycled if fewer than players).
+# Leave empty to auto-select based on available keys.
+# pool = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "gpt-4o", "gpt-4o-mini"]
+
+# Model used by the god agent for genesis. Leave empty to auto-select.
+# genesis = "claude-sonnet-4-6"
+
+# Server configuration (web mode only)
+[server]
+port = 8080

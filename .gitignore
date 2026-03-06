@@ -26,6 +26,7 @@ coverage.html
 .env
 .env.local
 .env.*.local
+config.toml
 
 # IDE
 .idea/

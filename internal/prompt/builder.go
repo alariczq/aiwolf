@@ -134,6 +134,7 @@ func BuildGameRules(roleCounts map[string]int, variant RulesVariant) string {
 
 type PromptContext struct {
 	GameRules         string
+	Setting           string
 	PlayerName        string
 	RoleName          string
 	RoleDescription   string
@@ -179,10 +180,17 @@ func formatSeerResults(results map[string]string) string {
 }
 
 func buildPersona(ctx PromptContext) string {
-	if ctx.Persona == "" {
+	var parts []string
+	if ctx.Setting != "" {
+		parts = append(parts, fmt.Sprintf("【世界观】\n%s", ctx.Setting))
+	}
+	if ctx.Persona != "" {
+		parts = append(parts, fmt.Sprintf("【你的人设】\n%s", ctx.Persona))
+	}
+	if len(parts) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("\n\n【你的人设】\n%s\n请在发言和思考中体现你的性格特点，让你的表现更有个人色彩。", ctx.Persona)
+	return "\n\n" + strings.Join(parts, "\n\n") + "\n你必须始终沉浸在上述世界观中扮演你的角色。你的一切言行、用词、比喻、举止都必须符合这个世界的设定，禁止出现不属于该世界的现代事物或表达方式。你的人设不只是说话风格，更是你做每一个游戏决策的依据——投票、站队、信任谁、怀疑谁、冒险还是保守，都必须由你的性格驱动。将角色演绎到底，绝不跳出人设。"
 }
 
 func buildRoleInfo(ctx PromptContext) string {
@@ -270,8 +278,7 @@ func BuildWerewolfNight(ctx PromptContext) string {
 
 现在是夜晚，狼人团队秘密行动。
 你的文字回复 = 狼队内部讨论（只有队友能看到，好人看不到）。
-使用 kill 工具提交你的击杀投票（可以空刀或自刀）。
-你必须用中文。%s`,
+使用 kill 工具提交你的击杀投票（可以空刀或自刀）。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -305,9 +312,7 @@ func BuildSeerNight(ctx PromptContext) string {
 现在是夜晚。选择一名玩家查验，了解其是"好人"还是"狼人"。
 你不能查验自己，也不能重复查验已查过的玩家。
 
-你的文字回复 = 你的内心推理（私密的，其他玩家看不到）。
-使用 investigate 工具提交你要查验的玩家名字。
-你必须用中文。%s`,
+使用 investigate 工具提交你要查验的玩家名字。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -366,9 +371,7 @@ func BuildWitchNight(ctx PromptContext) string {
 
 现在是夜晚。解药和毒药整局各限一次，同一晚只能用一种。
 
-你的文字回复 = 你的内心推理（私密的，其他玩家看不到）。
-使用解药请调用 heal 工具。使用毒药请调用 poison 工具并指定目标。
-你必须用中文。%s`,
+使用解药请调用 heal 工具。使用毒药请调用 poison 工具并指定目标。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -402,9 +405,7 @@ func BuildWolfBeautyCharm(ctx PromptContext) string {
 魅惑效果：当你死亡时，被魅惑的玩家也随之殉情出局。
 你可以魅惑任何存活玩家（包括狼队队友）。
 
-你的文字回复 = 你的内心推理（私密的，其他玩家看不到）。
-使用 charm 工具提交你的魅惑目标。
-你必须用中文。%s`,
+使用 charm 工具提交你的魅惑目标。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -440,9 +441,7 @@ func BuildGuardNight(ctx PromptContext, lastGuardTarget string) string {
 你可以守护自己，也可以空守。不能连续两晚守护同一人。
 守护只能挡狼刀，不能挡毒药。注意同守同救规则：守卫和女巫同时保护被刀者，保护抵消，被刀者死亡。
 
-你的文字回复 = 你的内心推理（私密的，其他玩家看不到）。
-使用 guard 工具提交你的守护选择。
-你必须用中文。%s`,
+使用 guard 工具提交你的守护选择。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -479,12 +478,8 @@ func BuildDayDiscussion(ctx PromptContext) string {
 
 现在是白天讨论阶段，之后投票淘汰一名玩家。
 
-你的行动步骤:
-1. 先在回复正文中思考——分析局势、推理身份。这是你的内心独白，只有你自己看得到。
-2. 想好之后，调用 speak 工具说出你的公开发言。所有玩家都能听到，简洁有力，2-4句话。
-
-公开发言是你表演给众人看的，要符合你的身份策略，和内心分析区分开。
-你必须用中文。%s`,
+先分析局势、推理身份，然后调用 speak 工具发表你的公开发言（2-4句话）。
+发言要符合你的身份策略——你是在对所有人说话。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -527,9 +522,7 @@ func BuildVote(ctx PromptContext) string {
 讨论阶段已结束。投票选择一名玩家淘汰。
 获得多数票的玩家将被淘汰（警长票权重 1.5，被归票者额外 +0.5）。
 
-你的文字回复 = 你的内心推理（私密的，其他玩家看不到）。
-使用 vote 工具提交你要投票淘汰的玩家名字。
-你必须用中文。%s`,
+使用 vote 工具提交你要投票淘汰的玩家名字。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -560,9 +553,7 @@ func BuildHunterShoot(ctx PromptContext) string {
 已知信息:
 %s%s
 
-你的文字回复 = 你的内心推理（私密的，其他玩家看不到）。
-使用 shoot 工具提交你的选择。
-你必须用中文。%s`,
+使用 shoot 工具提交你的选择。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		formatList(ctx.AlivePlayers),
@@ -585,8 +576,7 @@ func BuildCampaignDecision(ctx PromptContext) string {
 
 存活玩家: %s%s
 
-使用 campaign_decision 工具提交你的决定。
-你必须用中文。%s`,
+使用 campaign_decision 工具提交你的决定。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -613,12 +603,8 @@ func BuildSheriffCampaign(ctx PromptContext) string {
 
 存活玩家: %s%s%s
 
-你的行动步骤:
-1. 先在回复正文中思考——分析竞选策略。这是你的内心独白，只有你自己看得到。
-2. 想好之后，调用 speak 工具发表你的竞选演说。所有玩家都能听到，简洁有力，2-3句话。
-
-公开演说是你表演给众人看的，要符合你的身份策略，和内心分析区分开。
-你必须用中文。%s`,
+先分析竞选策略，然后调用 speak 工具发表你的竞选演说（2-3句话）。
+演说要符合你的身份策略——你是在对所有人说话。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -649,8 +635,7 @@ func BuildWithdrawDecision(ctx PromptContext) string {
 
 存活玩家: %s%s%s
 
-使用 withdraw_decision 工具提交你的决定。
-你必须用中文。%s`,
+使用 withdraw_decision 工具提交你的决定。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -677,9 +662,7 @@ func BuildSheriffElection(ctx PromptContext) string {
 
 候选人: %s%s%s
 
-你的文字回复 = 你的内心推理（私密的，其他玩家看不到）。
-使用 sheriff_vote 工具投给你选择的候选人。
-你必须用中文。%s`,
+使用 sheriff_vote 工具投给你选择的候选人。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -705,9 +688,7 @@ func BuildBadgeTransfer(ctx PromptContext) string {
 已知信息:
 %s%s
 
-你的文字回复 = 你的内心推理（私密的，其他玩家看不到）。
-使用 transfer_badge 工具提交你的选择。
-你必须用中文。%s`,
+使用 transfer_badge 工具提交你的选择。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -736,12 +717,7 @@ func BuildLastWords(ctx PromptContext) string {
 
 存活玩家: %s%s
 
-你的行动步骤:
-1. 先在回复正文中思考——整理你想说的最后的话。这是你的内心独白，只有你自己看得到。
-2. 想好之后，调用 speak 工具说出你的遗言。所有玩家都能听到，简洁有力，1-3句话。
-
-遗言和内心思考要区分开。
-你必须用中文。%s`,
+调用 speak 工具说出你的遗言（1-3句话）。这是你最后一次对所有人说话的机会。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -774,12 +750,8 @@ func BuildPKSpeech(ctx PromptContext, tiedPlayers []string) string {
 
 存活玩家: %s
 
-你的行动步骤:
-1. 先在回复正文中思考——分析如何为自己辩护。这是你的内心独白，只有你自己看得到。
-2. 想好之后，调用 speak 工具说出你的 PK 发言。所有玩家都能听到，简洁有力，2-3句话。
-
-公开发言是你表演给众人看的，要符合你的身份策略，和内心分析区分开。
-你必须用中文。%s`,
+分析如何为自己辩护，然后调用 speak 工具发表你的 PK 发言（2-3句话）。
+发言要符合你的身份策略——你是在为自己争取生存。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -814,9 +786,7 @@ func BuildPKVote(ctx PromptContext, tiedPlayers []string) string {
 PK 复投规则: 只能从平票玩家中选一人投票，每人 1 票，警长没有额外权重。再次平票则无人被淘汰。
 %s
 
-你的文字回复 = 你的内心推理（私密的，其他玩家看不到）。
-使用 vote 工具提交你要投票淘汰的玩家名字。
-你必须用中文。%s`,
+使用 vote 工具提交你要投票淘汰的玩家名字。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -846,9 +816,7 @@ func BuildSheriffEndorse(ctx PromptContext, candidates []string) string {
 
 存活玩家: %s%s%s
 
-你的文字回复 = 你的内心推理（私密的，其他玩家看不到）。
-使用 endorse 工具归票给你选择的玩家，或选择不归票。
-你必须用中文。%s`,
+使用 endorse 工具归票给你选择的玩家，或选择不归票。%s`,
 		ctx.GameRules,
 		ctx.PlayerName,
 		ctx.RoleName,
@@ -889,8 +857,7 @@ func BuildPostGameChat(playerName, roleName, persona, winner, gameSummary, allRo
 - 开玩笑、表达遗憾或得意
 - 回应别人刚才说的话
 
-语气要轻松有趣，像朋友间打完一局游戏后的闲聊。保持你的人设性格。
-你必须用中文。`,
+语气要轻松有趣，像朋友间打完一局游戏后的闲聊。保持你的人设性格。`,
 		winner,
 		playerName, roleName, personaLine,
 		allRoles,

@@ -3,6 +3,7 @@ package game
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"sort"
 	"strings"
@@ -37,6 +38,7 @@ type Engine struct {
 	gameRules      string
 	lastAPICall    time.Time
 	callInterval   time.Duration
+	callTimeout    time.Duration
 	witchSelfSave  config.WitchSelfSave
 	identityReveal config.IdentityReveal
 }
@@ -78,6 +80,7 @@ func NewEngine(ctx context.Context, cfg config.GameConfig, opts ...EngineOption)
 		narrator:       narr,
 		logger:         gl,
 		callInterval:   1500 * time.Millisecond,
+		callTimeout:    120 * time.Second,
 		setting:        cfg.Setting,
 		witchSelfSave:  cfg.WitchSelfSave,
 		identityReveal: cfg.IdentityReveal,
@@ -182,6 +185,7 @@ func (e *Engine) Logger() *callback.GameLogger {
 }
 
 func (e *Engine) sheriffElection(ctx context.Context) error {
+	slog.Info("phase start", "phase", "sheriff", "round", e.state.Round, "alive", len(e.state.AlivePlayers()))
 	e.emitEvent(UIEvent{Type: "phase_change", Phase: "sheriff", Round: e.state.Round})
 
 	alivePlayers := e.state.AlivePlayers()
@@ -227,7 +231,11 @@ func (e *Engine) sheriffElection(ctx context.Context) error {
 		decisionAgents = append(decisionAgents, agent)
 	}
 
-	parAgent, err := adk.NewParallelAgent(ctx, &adk.ParallelAgentConfig{
+	slog.Info("sheriff campaign decision start", "player_count", len(alivePlayers))
+	decCtx, decCancel := e.withCallTimeout(ctx)
+	defer decCancel()
+
+	parAgent, err := adk.NewParallelAgent(decCtx, &adk.ParallelAgentConfig{
 		Name:        "campaign_decisions",
 		Description: "All players decide whether to run for sheriff",
 		SubAgents:   decisionAgents,
@@ -236,8 +244,8 @@ func (e *Engine) sheriffElection(ctx context.Context) error {
 		return fmt.Errorf("creating campaign decision parallel agent: %w", err)
 	}
 
-	runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: parAgent})
-	iter := runner.Query(ctx, "请决定你是否要上警竞选警长。用中文。")
+	runner := adk.NewRunner(decCtx, adk.RunnerConfig{Agent: parAgent})
+	iter := runner.Query(decCtx, "请决定你是否要上警竞选警长。用中文。")
 
 	for {
 		event, ok := iter.Next()
@@ -245,7 +253,7 @@ func (e *Engine) sheriffElection(ctx context.Context) error {
 			break
 		}
 		if event.Err != nil {
-			e.printf("  [error] campaign decision API error: %v (skipping)\n", event.Err)
+			slog.Warn("campaign decision API error", "error", event.Err)
 			continue
 		}
 		msg, _, merr := adk.GetMessage(event)
@@ -260,6 +268,8 @@ func (e *Engine) sheriffElection(ctx context.Context) error {
 			}
 		}
 	}
+
+	slog.Info("sheriff campaign decision complete", "player_count", len(alivePlayers))
 
 	var candidates []*player.Player
 	var voters []*player.Player
@@ -332,11 +342,15 @@ func (e *Engine) sheriffElection(ctx context.Context) error {
 		pctx.SheriffSpeeches = sb.String()
 		instruction := prompt.BuildSheriffCampaign(pctx)
 
+		e.emitEvent(UIEvent{Type: "thinking_start", Player: p.Name, Round: e.state.Round, Phase: "sheriff"})
+
 		var thoughts strings.Builder
 		serr = e.retryOnTransient(p.Name, func() error {
 			thoughts.Reset()
+			callCtx, cancel := e.withCallTimeout(ctx)
+			defer cancel()
 
-			agent, aerr := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+			agent, aerr := adk.NewChatModelAgent(callCtx, &adk.ChatModelAgentConfig{
 				Name:        p.Name,
 				Description: fmt.Sprintf("%s campaigns for sheriff", p.Name),
 				Instruction: instruction,
@@ -351,8 +365,8 @@ func (e *Engine) sheriffElection(ctx context.Context) error {
 				return aerr
 			}
 
-			r := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
-			it := r.Query(ctx, "你已上警竞选警长。请发表你的竞选演说。用中文。")
+			r := adk.NewRunner(callCtx, adk.RunnerConfig{Agent: agent})
+			it := r.Query(callCtx, "你已上警竞选警长。请发表你的竞选演说。用中文。")
 
 			for {
 				event, ok := it.Next()
@@ -441,7 +455,10 @@ func (e *Engine) sheriffElection(ctx context.Context) error {
 			instruction := prompt.BuildWithdrawDecision(pctx)
 
 			werr = e.retryOnTransient(p.Name, func() error {
-				agent, aerr := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+				callCtx, cancel := e.withCallTimeout(ctx)
+				defer cancel()
+
+				agent, aerr := adk.NewChatModelAgent(callCtx, &adk.ChatModelAgentConfig{
 					Name:        fmt.Sprintf("withdraw_%s", p.Name),
 					Description: fmt.Sprintf("%s decides whether to withdraw from sheriff race", p.Name),
 					Instruction: instruction,
@@ -456,8 +473,8 @@ func (e *Engine) sheriffElection(ctx context.Context) error {
 					return aerr
 				}
 
-				r := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
-				it := r.Query(ctx, "竞选发言结束，请决定是否退水。用中文。")
+				r := adk.NewRunner(callCtx, adk.RunnerConfig{Agent: agent})
+				it := r.Query(callCtx, "竞选发言结束，请决定是否退水。用中文。")
 
 				for {
 					event, ok := it.Next()
@@ -592,8 +609,12 @@ func (e *Engine) sheriffElection(ctx context.Context) error {
 		return fmt.Errorf("creating sheriff parallel agent: %w", err)
 	}
 
-	voteRunner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: parVoteAgent})
-	voteIter := voteRunner.Query(ctx, "竞选发言已结束，请投票选出你心中的警长。请用中文。")
+	slog.Info("sheriff vote start", "voter_count", len(voters), "candidates", candidateNames)
+	svCtx, svCancel := e.withCallTimeout(ctx)
+	defer svCancel()
+
+	voteRunner := adk.NewRunner(svCtx, adk.RunnerConfig{Agent: parVoteAgent})
+	voteIter := voteRunner.Query(svCtx, "竞选发言已结束，请投票选出你心中的警长。请用中文。")
 
 	for {
 		event, ok := voteIter.Next()
@@ -601,7 +622,7 @@ func (e *Engine) sheriffElection(ctx context.Context) error {
 			break
 		}
 		if event.Err != nil {
-			e.printf("  [error] sheriff vote API error: %v (skipping)\n", event.Err)
+			slog.Warn("sheriff vote API error", "error", event.Err)
 			continue
 		}
 		msg, _, merr := adk.GetMessage(event)
@@ -730,9 +751,13 @@ func (e *Engine) sheriffPKVote(ctx context.Context, tiedPlayers []string, allPla
 		return "", fmt.Errorf("creating sheriff PK parallel agent: %w", err)
 	}
 
-	runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: parAgent})
+	slog.Info("sheriff PK vote start", "voter_count", len(voters), "tied", tiedPlayers)
+	pkCtx, pkCancel := e.withCallTimeout(ctx)
+	defer pkCancel()
+
+	runner := adk.NewRunner(pkCtx, adk.RunnerConfig{Agent: parAgent})
 	query := fmt.Sprintf("警长竞选 PK 投票。请从平票玩家中选择: %s。请用中文。", strings.Join(tiedPlayers, ", "))
-	iter := runner.Query(ctx, query)
+	iter := runner.Query(pkCtx, query)
 
 	for {
 		event, ok := iter.Next()
@@ -740,7 +765,7 @@ func (e *Engine) sheriffPKVote(ctx context.Context, tiedPlayers []string, allPla
 			break
 		}
 		if event.Err != nil {
-			e.printf("  [error] sheriff PK vote API error: %v (skipping)\n", event.Err)
+			slog.Warn("sheriff PK vote API error", "error", event.Err)
 			continue
 		}
 		msg, _, merr := adk.GetMessage(event)
@@ -842,6 +867,7 @@ func (e *Engine) badgeTransfer(ctx context.Context, sheriffName string) error {
 }
 
 func (e *Engine) nightPhase(ctx context.Context) error {
+	slog.Info("phase start", "phase", "night", "round", e.state.Round, "alive", len(e.state.AlivePlayers()))
 	e.println("--- 天黑请闭眼... ---")
 	e.emitEvent(UIEvent{Type: "phase_change", Phase: "night", Round: e.state.Round})
 	e.state.ResetNightActions()
@@ -1009,49 +1035,57 @@ func (e *Engine) werewolfAction(ctx context.Context) error {
 		}
 		targets = filtered
 	}
-	votes := make(map[string]string)
+
+	const maxWolfRounds = 3
 	var wolfChats []string
 
-	for _, wolf := range wolves {
-		var result string
-		killTool, err := action.CreateKillTool(targets, &result)
-		if err != nil {
-			return fmt.Errorf("creating kill tool for %s: %w", wolf.Name, err)
+	for round := 1; round <= maxWolfRounds; round++ {
+		votes := make(map[string]string)
+
+		for _, wolf := range wolves {
+			var result string
+			killTool, err := action.CreateKillTool(targets, &result)
+			if err != nil {
+				return fmt.Errorf("creating kill tool for %s: %w", wolf.Name, err)
+			}
+
+			pctx := e.buildPromptContext(wolf)
+			if len(wolfChats) > 0 {
+				pctx.WolfDiscussion = strings.Join(wolfChats, "\n")
+			}
+			instruction := prompt.BuildWerewolfNight(pctx)
+
+			e.emitEvent(UIEvent{Type: "thinking_start", Player: wolf.Name, Round: e.state.Round, Phase: "night"})
+
+			thoughts, err := e.runAgentCapture(ctx, wolf, instruction, []tool.InvokableTool{killTool})
+			if err != nil {
+				return fmt.Errorf("running wolf agent %s: %w", wolf.Name, err)
+			}
+
+			if thoughts != "" {
+				e.emitEvent(UIEvent{Type: "night_action", Action: "wolf_chat", Player: wolf.Name, Content: thoughts, Round: e.state.Round})
+			}
+
+			entry := fmt.Sprintf("%s: %s", wolf.Name, thoughts)
+			if result != "" {
+				entry += fmt.Sprintf(" [选择击杀: %s]", result)
+				votes[wolf.Name] = result
+				e.printf("[夜晚] %s [狼人] 投票击杀: %s (第%d轮)\n", displayTag(wolf), result, round)
+				e.emitEvent(UIEvent{Type: "night_action", Action: "kill_vote", Player: wolf.Name, Target: result, Round: e.state.Round})
+			} else {
+				e.printf("[夜晚] %s [狼人] 选择空刀 (第%d轮)\n", displayTag(wolf), round)
+			}
+			wolfChats = append(wolfChats, entry)
 		}
 
-		pctx := e.buildPromptContext(wolf)
-		if len(wolfChats) > 0 {
-			pctx.WolfDiscussion = strings.Join(wolfChats, "\n")
-		}
-		instruction := prompt.BuildWerewolfNight(pctx)
-
-		thoughts, err := e.runAgentCapture(ctx, wolf, instruction, []tool.InvokableTool{killTool})
-		if err != nil {
-			return fmt.Errorf("running wolf agent %s: %w", wolf.Name, err)
-		}
-
-		if thoughts != "" {
-			e.emitEvent(UIEvent{Type: "night_action", Action: "wolf_chat", Player: wolf.Name, Content: thoughts, Round: e.state.Round})
-		}
-
-		entry := fmt.Sprintf("%s: %s", wolf.Name, thoughts)
-		if result != "" {
-			entry += fmt.Sprintf(" [选择击杀: %s]", result)
-			votes[wolf.Name] = result
-			e.printf("[夜晚] %s [狼人] 投票击杀: %s\n", displayTag(wolf), result)
-			e.emitEvent(UIEvent{Type: "night_action", Action: "kill_vote", Player: wolf.Name, Target: result, Round: e.state.Round})
-		} else {
-			e.printf("[夜晚] %s [狼人] 选择空刀\n", displayTag(wolf))
-		}
-		wolfChats = append(wolfChats, entry)
-	}
-
-	if len(votes) > 0 {
-		vr := TallyVotes(votes)
-		if vr.IsTied {
-			e.printf("[夜晚] 狼人意见不一致，本轮空刀。\n")
+		if len(votes) == 0 {
+			e.printf("[夜晚] 狼人集体选择空刀。\n")
 			e.emitEvent(UIEvent{Type: "night_action", Action: "kill_decided", Round: e.state.Round})
-		} else {
+			return nil
+		}
+
+		vr := TallyVotes(votes)
+		if !vr.IsTied {
 			e.state.NightKillTarget = vr.Eliminated
 			e.state.AddEvent(GameEvent{
 				Round:   e.state.Round,
@@ -1062,14 +1096,34 @@ func (e *Engine) werewolfAction(ctx context.Context) error {
 				Content: fmt.Sprintf("狼人们决定击杀 %s。", vr.Eliminated),
 				Public:  false,
 			})
-			e.printf("[夜晚] 狼人们最终决定击杀: %s\n", vr.Eliminated)
+			e.printf("[夜晚] 狼人们最终决定击杀: %s (第%d轮达成一致)\n", vr.Eliminated, round)
 			e.emitEvent(UIEvent{Type: "night_action", Action: "kill_decided", Target: vr.Eliminated, Round: e.state.Round})
+			return nil
 		}
-	} else {
-		e.printf("[夜晚] 狼人集体选择空刀。\n")
+
+		if round < maxWolfRounds {
+			tallySummary := formatWolfTally(vr.Tally)
+			tiedNames := strings.Join(vr.TiedPlayers, "、")
+			retryNote := fmt.Sprintf("\n--- 第%d轮投票结果 ---\n票数: %s\n平票: %s\n意见不统一，请重新讨论并投票。剩余%d轮机会，若仍无法统一则视为空刀。",
+				round, tallySummary, tiedNames, maxWolfRounds-round)
+			wolfChats = append(wolfChats, retryNote)
+			e.printf("[夜晚] 狼人第%d轮投票平票 (%s)，进入下一轮讨论。\n", round, tallySummary)
+			e.emitEvent(UIEvent{Type: "night_action", Action: "wolf_chat", Content: fmt.Sprintf("投票平票 (%s)，狼人继续讨论...", tallySummary), Round: e.state.Round})
+		} else {
+			e.printf("[夜晚] 狼人%d轮投票均无法统一，本轮空刀。\n", maxWolfRounds)
+			e.emitEvent(UIEvent{Type: "night_action", Action: "kill_decided", Round: e.state.Round})
+		}
 	}
 
 	return nil
+}
+
+func formatWolfTally(tally map[string]int) string {
+	var parts []string
+	for target, count := range tally {
+		parts = append(parts, fmt.Sprintf("%s:%d票", target, count))
+	}
+	return strings.Join(parts, " ")
 }
 
 func (e *Engine) seerAction(ctx context.Context) error {
@@ -1435,6 +1489,7 @@ func (e *Engine) hunterShootTrigger(ctx context.Context, hunterName string) (str
 }
 
 func (e *Engine) dayPhase(ctx context.Context, deaths []string) error {
+	slog.Info("phase start", "phase", "day", "round", e.state.Round, "alive", len(e.state.AlivePlayers()), "deaths", deaths)
 	e.println("--- 白天讨论阶段 ---")
 	e.println()
 	e.emitEvent(UIEvent{Type: "phase_change", Phase: "day", Round: e.state.Round})
@@ -1500,11 +1555,15 @@ func (e *Engine) dayPhase(ctx context.Context, deaths []string) error {
 		pctx.PreviousSpeeches = e.state.FormatSpeeches(e.state.Round)
 		instruction := prompt.BuildDayDiscussion(pctx)
 
+		e.emitEvent(UIEvent{Type: "thinking_start", Player: p.Name, Round: e.state.Round, Phase: "day"})
+
 		var thoughts strings.Builder
 		err = e.retryOnTransient(p.Name, func() error {
 			thoughts.Reset()
+			callCtx, cancel := e.withCallTimeout(ctx)
+			defer cancel()
 
-			agent, aerr := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+			agent, aerr := adk.NewChatModelAgent(callCtx, &adk.ChatModelAgentConfig{
 				Name:        p.Name,
 				Description: fmt.Sprintf("%s speaks during day discussion", p.Name),
 				Instruction: instruction,
@@ -1519,8 +1578,8 @@ func (e *Engine) dayPhase(ctx context.Context, deaths []string) error {
 				return aerr
 			}
 
-			runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
-			iter := runner.Query(ctx, "轮到你发言了。用中文说出你的看法和怀疑。")
+			runner := adk.NewRunner(callCtx, adk.RunnerConfig{Agent: agent})
+			iter := runner.Query(callCtx, "轮到你发言了。用中文说出你的看法和怀疑。")
 
 			for {
 				event, ok := iter.Next()
@@ -1728,6 +1787,7 @@ func (e *Engine) sheriffEndorse(ctx context.Context) string {
 }
 
 func (e *Engine) votePhase(ctx context.Context) error {
+	slog.Info("phase start", "phase", "vote", "round", e.state.Round, "alive", len(e.state.AlivePlayers()))
 	e.println("--- 投票阶段 ---")
 	e.emitEvent(UIEvent{Type: "phase_change", Phase: "vote", Round: e.state.Round})
 
@@ -1784,6 +1844,10 @@ func (e *Engine) votePhase(ctx context.Context) error {
 		return nil
 	}
 
+	for _, v := range voters {
+		e.emitEvent(UIEvent{Type: "thinking_start", Player: v.Name, Round: e.state.Round, Phase: "vote"})
+	}
+
 	parAgent, err := adk.NewParallelAgent(ctx, &adk.ParallelAgentConfig{
 		Name:        "vote_phase",
 		Description: "Parallel voting where all players vote simultaneously",
@@ -1793,12 +1857,16 @@ func (e *Engine) votePhase(ctx context.Context) error {
 		return fmt.Errorf("creating parallel agent: %w", err)
 	}
 
-	runner := adk.NewRunner(ctx, adk.RunnerConfig{
+	slog.Info("vote phase parallel start", "voter_count", len(voters), "round", e.state.Round)
+	vtCtx, vtCancel := e.withCallTimeout(ctx)
+	defer vtCancel()
+
+	runner := adk.NewRunner(vtCtx, adk.RunnerConfig{
 		Agent: parAgent,
 	})
 
 	query := fmt.Sprintf("第 %d 回合投票。每位玩家必须投票选择一名玩家淘汰。请用中文。", e.state.Round)
-	iter := runner.Query(ctx, query)
+	iter := runner.Query(vtCtx, query)
 
 	for {
 		event, ok := iter.Next()
@@ -1806,7 +1874,7 @@ func (e *Engine) votePhase(ctx context.Context) error {
 			break
 		}
 		if event.Err != nil {
-			e.printf("  [error] vote phase API error: %v (skipping)\n", event.Err)
+			slog.Warn("vote phase API error", "error", event.Err)
 			continue
 		}
 		msg, _, err := adk.GetMessage(event)
@@ -1976,11 +2044,15 @@ func (e *Engine) lastWords(ctx context.Context, p *player.Player) error {
 	pctx := e.buildPromptContext(p)
 	instruction := prompt.BuildLastWords(pctx)
 
+	e.emitEvent(UIEvent{Type: "thinking_start", Player: p.Name, Round: e.state.Round, Phase: "last_words"})
+
 	var thoughts strings.Builder
 	err = e.retryOnTransient(p.Name, func() error {
 		thoughts.Reset()
+		callCtx, cancel := e.withCallTimeout(ctx)
+		defer cancel()
 
-		agent, aerr := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		agent, aerr := adk.NewChatModelAgent(callCtx, &adk.ChatModelAgentConfig{
 			Name:        fmt.Sprintf("lastwords_%s", p.Name),
 			Description: fmt.Sprintf("%s delivers last words", p.Name),
 			Instruction: instruction,
@@ -1995,8 +2067,8 @@ func (e *Engine) lastWords(ctx context.Context, p *player.Player) error {
 			return aerr
 		}
 
-		runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
-		iter := runner.Query(ctx, "你被淘汰了。请发表你的遗言。用中文。")
+		runner := adk.NewRunner(callCtx, adk.RunnerConfig{Agent: agent})
+		iter := runner.Query(callCtx, "你被淘汰了。请发表你的遗言。用中文。")
 
 		for {
 			event, ok := iter.Next()
@@ -2066,11 +2138,15 @@ func (e *Engine) pkRound(ctx context.Context, tiedPlayers []string) error {
 		pctx.PreviousSpeeches = e.state.FormatSpeeches(e.state.Round)
 		instruction := prompt.BuildPKSpeech(pctx, tiedPlayers)
 
+		e.emitEvent(UIEvent{Type: "thinking_start", Player: p.Name, Round: e.state.Round, Phase: "pk"})
+
 		var thoughts strings.Builder
 		err = e.retryOnTransient(p.Name, func() error {
 			thoughts.Reset()
+			callCtx, cancel := e.withCallTimeout(ctx)
+			defer cancel()
 
-			agent, aerr := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+			agent, aerr := adk.NewChatModelAgent(callCtx, &adk.ChatModelAgentConfig{
 				Name:        fmt.Sprintf("pk_%s", p.Name),
 				Description: fmt.Sprintf("%s delivers PK speech", p.Name),
 				Instruction: instruction,
@@ -2085,8 +2161,8 @@ func (e *Engine) pkRound(ctx context.Context, tiedPlayers []string) error {
 				return aerr
 			}
 
-			runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
-			iter := runner.Query(ctx, "你进入了 PK 环节。请发表你的 PK 发言，说服大家不要淘汰你。用中文。")
+			runner := adk.NewRunner(callCtx, adk.RunnerConfig{Agent: agent})
+			iter := runner.Query(callCtx, "你进入了 PK 环节。请发表你的 PK 发言，说服大家不要淘汰你。用中文。")
 
 			for {
 				event, ok := iter.Next()
@@ -2345,10 +2421,13 @@ func (e *Engine) postGameChat(ctx context.Context, win WinResult) {
 		)
 
 		e.throttle()
+		e.emitEvent(UIEvent{Type: "thinking_start", Player: p.Name, Round: e.state.Round, Phase: "postgame"})
 		err = e.retryOnTransient(p.Name, func() error {
 			speechResult = ""
+			callCtx, cancel := e.withCallTimeout(ctx)
+			defer cancel()
 
-			agent, aerr := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+			agent, aerr := adk.NewChatModelAgent(callCtx, &adk.ChatModelAgentConfig{
 				Name:        p.Name,
 				Description: fmt.Sprintf("%s chats in post-game debrief", p.Name),
 				Instruction: instruction,
@@ -2363,8 +2442,8 @@ func (e *Engine) postGameChat(ctx context.Context, win WinResult) {
 				return aerr
 			}
 
-			runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
-			iter := runner.Query(ctx, "游戏结束了，轮到你发表赛后感言。用中文。")
+			runner := adk.NewRunner(callCtx, adk.RunnerConfig{Agent: agent})
+			iter := runner.Query(callCtx, "游戏结束了，轮到你发表赛后感言。用中文。")
 
 			for {
 				event, ok := iter.Next()
@@ -2406,11 +2485,15 @@ func isTransientError(err error) bool {
 	if err == nil {
 		return false
 	}
+	if err == context.DeadlineExceeded {
+		return true
+	}
 	s := err.Error()
 	for _, pattern := range []string{
 		"unexpected EOF", "connection reset", "connection refused",
 		"i/o timeout", "TLS handshake timeout",
-		"502", "503", "429",
+		"deadline exceeded", "context deadline exceeded",
+		"500", "502", "503", "429",
 	} {
 		if strings.Contains(s, pattern) {
 			return true
@@ -2434,23 +2517,63 @@ func (e *Engine) retryOnTransient(name string, fn func() error) error {
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
-			delay := time.Duration(attempt) * 3 * time.Second
-			e.printf("  [retry] %s API call failed, retrying (%d/%d) after %v...\n", name, attempt, maxRetries, delay)
+			delay := time.Duration(1<<uint(attempt)) * 2 * time.Second
+			if delay > 30*time.Second {
+				delay = 30 * time.Second
+			}
+			slog.Warn("retrying API call",
+				"player", name,
+				"attempt", attempt,
+				"max_retries", maxRetries,
+				"delay", delay.String(),
+				"error", lastErr,
+			)
 			e.emitEvent(UIEvent{Type: "narration", Content: fmt.Sprintf("%s API 调用失败，正在重试 (%d/%d)...", name, attempt, maxRetries)})
 			time.Sleep(delay)
 		}
 		e.throttle()
+		start := time.Now()
 		err := fn()
+		elapsed := time.Since(start)
 		if err == nil {
+			if attempt > 0 {
+				slog.Info("retry succeeded",
+					"player", name,
+					"attempt", attempt,
+					"elapsed_ms", elapsed.Milliseconds(),
+				)
+			}
 			return nil
 		}
 		lastErr = err
 		if !isTransientError(err) {
+			slog.Error("non-transient API error",
+				"player", name,
+				"error", err,
+				"elapsed_ms", elapsed.Milliseconds(),
+			)
 			return err
 		}
-		e.printf("  [error] %s: %v\n", name, err)
+		slog.Warn("transient API error",
+			"player", name,
+			"attempt", attempt,
+			"error", err,
+			"elapsed_ms", elapsed.Milliseconds(),
+		)
 	}
+	slog.Error("all retries exhausted",
+		"player", name,
+		"retries", maxRetries,
+		"error", lastErr,
+	)
 	return fmt.Errorf("after %d retries: %w", maxRetries, lastErr)
+}
+
+func (e *Engine) withCallTimeout(parent context.Context) (context.Context, context.CancelFunc) {
+	if e.callTimeout > 0 {
+		return context.WithTimeout(parent, e.callTimeout)
+	}
+	return parent, func() {}
 }
 
 func (e *Engine) runAgentWithTool(ctx context.Context, p *player.Player, instruction string, tools []tool.InvokableTool) error {
@@ -2460,7 +2583,10 @@ func (e *Engine) runAgentWithTool(ctx context.Context, p *player.Player, instruc
 	}
 
 	return e.retryOnTransient(p.Name, func() error {
-		agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		callCtx, cancel := e.withCallTimeout(ctx)
+		defer cancel()
+
+		agent, err := adk.NewChatModelAgent(callCtx, &adk.ChatModelAgentConfig{
 			Name:        p.Name,
 			Description: fmt.Sprintf("%s performing night action", p.Name),
 			Instruction: instruction,
@@ -2475,8 +2601,8 @@ func (e *Engine) runAgentWithTool(ctx context.Context, p *player.Player, instruc
 			return err
 		}
 
-		runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
-		iter := runner.Query(ctx, "轮到你了，执行你的夜晚行动。请用中文。")
+		runner := adk.NewRunner(callCtx, adk.RunnerConfig{Agent: agent})
+		iter := runner.Query(callCtx, "轮到你了，执行你的夜晚行动。请用中文。")
 
 		for {
 			event, ok := iter.Next()
@@ -2508,7 +2634,10 @@ func (e *Engine) runAgentCapture(ctx context.Context, p *player.Player, instruct
 
 	var captured string
 	err := e.retryOnTransient(p.Name, func() error {
-		agent, aerr := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		callCtx, cancel := e.withCallTimeout(ctx)
+		defer cancel()
+
+		agent, aerr := adk.NewChatModelAgent(callCtx, &adk.ChatModelAgentConfig{
 			Name:        p.Name,
 			Description: fmt.Sprintf("%s performing night action", p.Name),
 			Instruction: instruction,
@@ -2523,8 +2652,8 @@ func (e *Engine) runAgentCapture(ctx context.Context, p *player.Player, instruct
 			return aerr
 		}
 
-		runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
-		iter := runner.Query(ctx, "轮到你了，执行你的夜晚行动。请用中文。")
+		runner := adk.NewRunner(callCtx, adk.RunnerConfig{Agent: agent})
+		iter := runner.Query(callCtx, "轮到你了，执行你的夜晚行动。请用中文。")
 
 		var thoughts strings.Builder
 		for {
@@ -2554,6 +2683,7 @@ func (e *Engine) runAgentCapture(ctx context.Context, p *player.Player, instruct
 func (e *Engine) buildPromptContext(p *player.Player) prompt.PromptContext {
 	pctx := prompt.PromptContext{
 		GameRules:        e.gameRules,
+		Setting:          e.setting,
 		PlayerName:       p.Name,
 		RoleName:         p.Role.Name(),
 		RoleDescription:  p.Role.Description(),

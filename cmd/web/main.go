@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
-
-	"github.com/joho/godotenv"
 
 	"github.com/alaric/eino-learn/internal/config"
 	"github.com/alaric/eino-learn/internal/game"
@@ -20,24 +19,24 @@ import (
 	_ "github.com/alaric/eino-learn/internal/role"
 )
 
-func main() {
-	_ = godotenv.Load()
+var appCfg config.AppConfig
 
-	if os.Getenv("CLAUDE_API_KEY") == "" && os.Getenv("GEMINI_API_KEY") == "" {
-		fmt.Fprintln(os.Stderr, "Set CLAUDE_API_KEY and/or GEMINI_API_KEY environment variables.")
-		os.Exit(1)
+func main() {
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})))
+
+	appCfg = config.Load()
+	if err := appCfg.Validate(); err != nil {
+		log.Fatalf("[config] %v", err)
 	}
 
 	http.HandleFunc("/", serveIndex)
 	http.HandleFunc("/api/game", handleGame)
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	log.Printf("Werewolf game server starting on http://localhost:%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	addr := fmt.Sprintf(":%d", appCfg.Port)
+	log.Printf("Werewolf game server starting on http://localhost%s", addr)
+	log.Fatal(http.ListenAndServe(addr, nil))
 }
 
 func projectRoot() string {
@@ -92,10 +91,11 @@ func handleGame(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
+	scenario := r.URL.Query().Get("scenario")
+
 	emit(game.UIEvent{Type: "genesis_start"})
 
-	modelCfg := config.ModelConfigFromEnv()
-	cfg, err := genesis.Create(ctx, modelCfg)
+	cfg, err := genesis.Create(ctx, appCfg.Models, scenario)
 	if err != nil {
 		emit(game.UIEvent{Type: "error", Content: fmt.Sprintf("Genesis failed: %v", err)})
 		return
